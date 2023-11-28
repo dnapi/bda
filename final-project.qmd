@@ -92,6 +92,8 @@ credit_long_colnames <- colnames(data_credit_names)
 colnames(data_credit) <- credit_long_colnames
 print(head(data_credit))
 #colnames(data_credit) <- credit_short_colnames
+credit_long_colnames
+credit_short_colnames
 ```
 
 ## data extraction
@@ -106,6 +108,9 @@ credit_long_colnames <- colnames(data_credit_names)
 colnames(data_credit) <- credit_long_colnames
 #sort(unique(data_credit$EDUCATION))
 #sort(unique(data_credit$PAY_0))
+round(sort(unique(data_credit$LIMIT_BAL))/1000)
+
+data_credit_unclean=data_credit
 
 data_credit <- data_credit %>% 
   filter(PAY_0 != -2) %>% filter(PAY_0 != 0) %>% 
@@ -113,7 +118,8 @@ data_credit <- data_credit %>%
   filter(PAY_3 != -2)  %>% filter(PAY_3 != 0)  %>% 
   filter(PAY_4 != -2)  %>% filter(PAY_4 != 0)  %>% 
   filter(PAY_5 != -2)  %>% filter(PAY_5 != 0)  %>% 
-  filter(PAY_6 != -2)  %>% filter(PAY_6 != 0)
+  filter(PAY_6 != -2)  %>% filter(PAY_6 != 0)  %>%
+  filter(EDUCATION > 0) %>% filter(EDUCATION < 4)
 
 
 data_credit_edu <-function(edu,def){data_credit %>% filter(EDUCATION == edu) %>% filter(default == def) %>% sample_n(40)}
@@ -121,10 +127,55 @@ data_credit_edu <-function(edu,def){data_credit %>% filter(EDUCATION == edu) %>%
 combined_df <- rbind(data_credit_edu(1,0), data_credit_edu(1,1),
                      data_credit_edu(2,0), data_credit_edu(2,1),
                      data_credit_edu(3,0), data_credit_edu(3,1)) 
-# not enough data for education
+# not enough data for education = 4
 #data_credit %>% filter(EDUCATION == 4) %>% filter(default == 1)
+
+write.csv(combined_df, file = "credit_data_education_short.csv")
+
+dim(data_credit)
+data_credit_full = data_credit
+data_credit = combined_df
 ```
 
+
+## correlations in full dataset
+```{r}
+
+
+colnames(data_credit_full) <- credit_long_colnames
+df = data_credit_full
+#correlations <- sapply(df[, -which(names(df) == "Y")], function(x) cor.test(x, df$Y)$estimate)
+#correlations <- sapply(df[, -which(names(df) == "Y")], function(x) biserial.cor(x, df$Y))
+correlations <- sapply(df[, -which(names(df) == "default")], function(x) biserial.cor(x, df$default))
+list_cor = sort(round(abs(correlations),3))
+correlations_df <- data.frame(
+  Variable = names(list_cor),
+  Correlation = as.vector(list_cor)
+)
+
+# Display the correlation coefficients
+
+
+
+data_credit_names
+correlations_df %>% filter(Correlation > 0)
+
+cor_matrix <- cor(data_credit[, -1])  
+
+# Create a correlation matrix plot
+#corrplot(cor_matrix, method = "number", type = "upper", order = "hclust", tl.col = "black", tl.srt = 45)
+corrplot(cor_matrix, method = "color", type = "upper", order = "hclust", tl.col = "black", tl.srt = 45,cl.cex = 0.7,tl.cex =0.7,number.cex = 0.4)
+
+title("Correlation Matrix Plot")
+print(t(data_credit_names))
+
+correlations <- cor(data_credit[, 'default'], data_credit[, -which(names(data_credit) == 'default')])
+
+round(correlations,3)
+
+
+
+```
 ## correlations
 ```{r}
 
@@ -145,7 +196,7 @@ correlations_df <- data.frame(
 
 
 data_credit_names
-correlations_df %>% filter(Correlation > 0.07)
+correlations_df %>% filter(Correlation > 0)
 ```
 
 ```{r}
@@ -181,7 +232,8 @@ for (col in as.list(col_names$Variable)) {
 }
 ```
 
-## Stan model
+
+## Stan model PAY_0 + PAY_2
 ```{r}
 #Time  1.36 mins
 start.time <- Sys.time()
@@ -194,18 +246,18 @@ fit <- brm(default ~ PAY_0 + PAY_2,
               #prior(exponential(.02), class="sigma") #p(sigma)
             ),
             family = bernoulli(),
-            file = "model1_temp",
+            file = "model1",
            backend = "cmdstanr"
 )
 end.time <- Sys.time()
 time.taken <- round(end.time - start.time,2)
 time.taken
 ```
-```{r}
-print(fit)
-plot(fit)
-mcmc_pairs(fit)
-```
+#```{r}
+#print(fit)
+#plot(fit)
+#mcmc_pairs(fit)
+#```
 ```{r}
 start.time <- Sys.time()
 predictions <- predict(fit, newdata = data_credit, type = "response")
@@ -213,27 +265,38 @@ end.time <- Sys.time()
 time.taken <- round(end.time - start.time,2)
 time.taken
 ```
-          
 ```{r}
-#dim(predictions)
+start.time <- Sys.time()
+predictions_full <- predict(fit, newdata = data_credit_full, type = "response")
+end.time <- Sys.time()
+time.taken <- round(end.time - start.time,2)
+time.taken
+```
+```{r}
+start.time <- Sys.time()
+predictions_unclean<- predict(fit, newdata = data_credit_unclean, type = "response")
+end.time <- Sys.time()
+time.taken <- round(end.time - start.time,2)
+time.taken
+```
+
+```{r}
 binary_predictions <- ifelse(predictions[,1] > 0.5, 1, 0)
-
-#dim(data_credit[,"default"])
 library(caret)
-
-# Create confusion matrix and calculate F1 score
 conf_matrix <- confusionMatrix(factor(binary_predictions), factor(data_credit$default))
 conf_matrix
+```
+```{r}
+binary_predictions_full <- ifelse(predictions_full[,1] > 0.5, 1, 0)
+conf_matrix <- confusionMatrix(factor(binary_predictions_full), factor(data_credit_full$default))
+conf_matrix
 
-
-#?posPredValue.default
-
-
-#f1_score <- posPredValue(conf_matrix) * sensitivity(conf_matrix) / (posPredValue(conf_matrix) + sensitivity(conf_matrix))
-
-# Display the confusion matrix and F1 score
-#print(conf_matrix)
-#cat("F1 Score:", f1_score, "\n")
+(2104+1015)/4030
+```
+```{r}
+binary_predictions_unclean <- ifelse(predictions_unclean[,1] > 0.5, 1, 0)
+conf_matrix <- confusionMatrix(factor(binary_predictions_unclean), factor(data_credit_unclean$default))
+conf_matrix
 
 ```
 
@@ -249,8 +312,9 @@ start.time <- Sys.time()
 #fit2_education <- brm(default ~ 1 + (PAY_0| EDUCATION),    # first 1000 dataset time ~terminated abnormally
 #fit2_education <- brm(default ~ PAY_0 + (PAY_0| EDUCATION),    # first 100 dataset time ~ 44 sec
 #fit2_education <- brm(default ~ PAY_0 + PAY_2 + (PAY_0 + PAY_2| EDUCATION),   # first 1000 dataset time ~ 1.45 min
-fit2_education <- brm(default ~ PAY_0 + PAY_2 + (PAY_0 + PAY_2| EDUCATION),   # first 10000 dataset time ~ 16.5 min
-            data = head(data_credit, n = 10000),
+#fit2_education <- brm(default ~ PAY_0 + PAY_2 + (PAY_0 + PAY_2| EDUCATION),   # first 10000 dataset time ~ 16.5 min
+fit2_education <- brm(default ~ PAY_0 + PAY_2 + (PAY_0 + PAY_2| EDUCATION),   # shart dataset
+            data = data_credit,
             refresh = 0,
             prior=c(
               prior(normal(0,100), class="Intercept")
@@ -270,7 +334,7 @@ time.taken
 ```{r}
 start.time <- Sys.time()
 data_cut = head(data_credit, n = 10000)
-predictions <- predict(fit2_education, newdata = data_cut, type = "response", allow_new_levels = TRUE)
+predictions <- predict(fit2_education, newdata = data_credit, type = "response", allow_new_levels = TRUE)
 end.time <- Sys.time()
 time.taken <- round(end.time - start.time,2)
 time.taken
@@ -284,22 +348,145 @@ mean(head(data_cut, n = 10000)$default)
 dim(data_credit[,"default"])
 library(caret)
 
-# Create confusion matrix and calculate F1 score
 conf_matrix <- confusionMatrix(factor(binary_predictions), factor(head(data_cut, n = 10000)$default))
 conf_matrix
+```
 
+```{r}
+start.time <- Sys.time()
+predictions_full <- predict(fit, newdata = data_credit_full, type = "response")
+end.time <- Sys.time()
+time.taken <- round(end.time - start.time,2)
+time.taken
+```
 
-#?posPredValue.default
+```{r}
+binary_predictions_full <- ifelse(predictions_full[,1] > 0.5, 1, 0)
+conf_matrix <- confusionMatrix(factor(binary_predictions_full), factor(data_credit_full$default))
+conf_matrix
+```
 
-
-#f1_score <- posPredValue(conf_matrix) * sensitivity(conf_matrix) / (posPredValue(conf_matrix) + sensitivity(conf_matrix))
-
-# Display the confusion matrix and F1 score
-#print(conf_matrix)
-#cat("F1 Score:", f1_score, "\n")
+```{r}
+start.time <- Sys.time()
+predictions_unclean<- predict(fit, newdata = data_credit_unclean, type = "response")
+end.time <- Sys.time()
+time.taken <- round(end.time - start.time,2)
+time.taken
+```
+```{r}
+binary_predictions_unclean <- ifelse(predictions_unclean[,1] > 0.5, 1, 0)
+conf_matrix <- confusionMatrix(factor(binary_predictions_unclean), factor(data_credit_unclean$default))
+conf_matrix
 
 ```
 
+
+## Stan model New
+```{r}
+#head(data_credit, n = 100)
+```
+
+```{r}
+start.time <- Sys.time()
+fit2_limit_bal <- brm(default ~ LIMIT_BAL,   # shart dataset
+            data = data_credit,
+            refresh = 0,
+            prior=c(
+              prior(normal(0,100), class="Intercept")
+              #prior(exponential(.02), class="sd"),#p(tau)
+              #prior(exponential(.02), class="sigma") #p(sigma)
+            ),
+            family = bernoulli(),
+            file = "fit2_limit_bal",
+            backend = "cmdstanr"
+)
+end.time <- Sys.time()
+time.taken <- round(end.time - start.time,2)
+time.taken
+
+```
+
+```{r}
+start.time <- Sys.time()
+predictions <- predict(fit2_limit_bal, newdata = data_credit, type = "response", allow_new_levels = TRUE)
+end.time <- Sys.time()
+time.taken <- round(end.time - start.time,2)
+time.taken
+```
+          
+```{r}
+binary_predictions <- ifelse(predictions[,1] > 0.5, 1, 0)
+conf_matrix <- confusionMatrix(factor(binary_predictions), factor(data_credit$default))
+conf_matrix
+```
+
+```{r}
+start.time <- Sys.time()
+predictions_full <- predict(fit2_limit_bal, newdata = data_credit_full, type = "response",allow_new_levels = TRUE)
+end.time <- Sys.time()
+time.taken <- round(end.time - start.time,2)
+time.taken
+```
+```{r}
+binary_predictions_full <- ifelse(predictions_full[,1] > 0.5, 1, 0)
+conf_matrix <- confusionMatrix(factor(binary_predictions_full), factor(data_credit_full$default))
+conf_matrix
+```
+
+
+## Stan model New Hierarch
+```{r}
+#head(data_credit, n = 100)
+```
+
+```{r}
+start.time <- Sys.time()
+#fit2_limit_bal_h <- brm(default ~ PAY_0  + (LIMIT_BAL | PAY_0),
+fit2_limit_bal_h <- brm(default ~ PAY_0  + (LIMIT_BAL | PAY_0), 
+            data = data_credit,
+            refresh = 0,
+            prior=c(
+              prior(normal(0,100), class="Intercept")
+              #prior(exponential(.02), class="sd"),#p(tau)
+              #prior(exponential(.02), class="sigma") #p(sigma)
+            ),
+            family = bernoulli(),
+            #file = "fit2_limit_bal_h",
+            backend = "cmdstanr"
+)
+end.time <- Sys.time()
+time.taken <- round(end.time - start.time,2)
+time.taken
+
+```
+
+```{r}
+start.time <- Sys.time()
+predictions <- predict(fit2_limit_bal_h, newdata = data_credit, type = "response", allow_new_levels = TRUE)
+end.time <- Sys.time()
+time.taken <- round(end.time - start.time,2)
+time.taken
+```
+          
+```{r}
+binary_predictions <- ifelse(predictions[,1] > 0.5, 1, 0)
+library(caret)
+conf_matrix <- confusionMatrix(factor(binary_predictions), factor(data_credit$default))
+conf_matrix
+```
+
+```{r}
+start.time <- Sys.time()
+predictions_full <- predict(fit2_limit_bal_h, newdata = data_credit_full, type = "response",allow_new_levels = TRUE)
+end.time <- Sys.time()
+time.taken <- round(end.time - start.time,2)
+time.taken
+```
+```{r}
+binary_predictions_full <- ifelse(predictions_full[,1] > 0.5, 1, 0)
+conf_matrix <- confusionMatrix(factor(binary_predictions_full), factor(data_credit_full$default))
+conf_matrix
+```
 
 
 ## Customer behaviour data (Alternative dataset)
