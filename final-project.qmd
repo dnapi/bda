@@ -59,6 +59,7 @@ register_knitr_engine(override = FALSE)
 #install.packages("stats")
 #install.packages("ltm")
 #install.packages("caret") # confusion matrix -> F1
+#install.packages("xtable"). # latex output
 ```
 
 # Load the packages
@@ -68,6 +69,7 @@ library(corrplot)
 #library(psych)
 library(ltm)
 library(caret)
+library(xtable)
 ```
 
 :::
@@ -258,7 +260,7 @@ fit <- brm(default ~ PAY_0 + PAY_2,
                 prior(normal(0, 100), class = b)
             ),
             family = bernoulli(),
-        #    file = "model1",
+           file = "pooled",
            backend = "cmdstanr"
 )
 end.time <- Sys.time()
@@ -335,10 +337,7 @@ conf_matrix
 
 ```
 
-## Stan model 2
-```{r}
-#head(data_credit, n = 100)
-```
+## Stan model (PAY_0 + PAY_2| EDUCATION) Hierarchical
 
 ```{r}
 start.time <- Sys.time()
@@ -360,28 +359,33 @@ fit2_education <- brm(default ~  (PAY_0 + PAY_2| EDUCATION),   # shart dataset
                # prior(normal(0, 100), class = b)
             ),
             family = bernoulli(),
-        #    file = "model2_education_big",
+      #      file = "model2_education_small_data_set",
             backend = "cmdstanr"
+            ,
+            iter = 8000,
+            warmup = floor(8000/2)
 )
 end.time <- Sys.time()
 time.taken <- round(end.time - start.time,2)
 time.taken
 
 ```
-
 ```{r}
-start.time <- Sys.time()
-predictions <- predict(fit2_education, newdata = data_credit, type = "response", allow_new_levels = TRUE)
-end.time <- Sys.time()
-time.taken <- round(end.time - start.time,2)
-time.taken
+prior_summary(fit2_education)
 ```
-          
+
 ```{r}
+# mean of posterior_predict is the same as predict
+post_pred = colMeans(brms::posterior_predict(fit2_education))
+predictions <- predict(fit2_education, newdata = data_credit, type = "response", allow_new_levels = TRUE)
+
+#mean((post_pred - predictions[,1])/post_pred)
+#-0.003031049
+
+```
+```{r}
+predictions <- predict(fit2_education, newdata = data_credit, type = "response", allow_new_levels = TRUE)
 binary_predictions <- ifelse(predictions[,1] > 0.5, 1, 0)
-
-library(caret)
-
 conf_matrix <- confusionMatrix(factor(binary_predictions), factor(data_credit$default))
 conf_matrix
 ```
@@ -414,6 +418,38 @@ conf_matrix
 
 ```
 
+## Model comparison (e.g. with LOO-CV).
+
+
+```{r}
+fit1 = fit
+fit2 = fit2_education
+l1 = loo(fit1)
+l2 = loo(fit2)
+res = loo_compare(l1,l2)
+res
+xtable(res)
+
+```
+```{r}
+plot(l1, label_points = TRUE, main = 'PSIS diagnostic plot for pooled model')
+plot(l2, label_points = TRUE, main = 'PSIS diagnostic plot for hierarchical model')
+```
+
+## Convergence diagnostic  
+```{r}
+sum_fit1=summarize_draws(fit1)
+sum_fit1
+xtable(sum_fit1)
+```
+```{r}
+sum_fit2=summarize_draws(fit2)
+sum_fit2
+xtable(sum_fit2)
+```
+
+
+# The rest of codes. 
 ## Stan model with Credit LIMIT_BAL_BINS No HIERARCHi
 ```{r}
 #head(data_credit, n = 100)
