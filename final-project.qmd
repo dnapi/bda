@@ -350,7 +350,9 @@ start.time <- Sys.time()
 #fit2_education <- brm(default ~ PAY_0 + PAY_2 + (1| EDUCATION),   # shart dataset
 #fit2_education <- brm(default ~ 1 + (PAY_0 + PAY_2| EDUCATION),   # shart dataset
 #fit2_education <- brm(default ~ PAY_0 + PAY_2 + (PAY_0 + PAY_2| EDUCATION),   # shart dataset
-fit2_education <- brm(default ~  (PAY_0 + PAY_2| EDUCATION),   # shart dataset
+#fit2_education <- brm(default ~  PAY_0 + PAY_2 + (1| EDUCATION),   # shart dataset
+#fit2_education <- brm(default ~ (1| EDUCATION),   # short dataset
+fit2_education <- brm(default ~ (PAY_0 + PAY_2| EDUCATION),   # shart dataset
             data = data_credit,
             refresh = 0,
             prior=c(
@@ -359,11 +361,10 @@ fit2_education <- brm(default ~  (PAY_0 + PAY_2| EDUCATION),   # shart dataset
                # prior(normal(0, 100), class = b)
             ),
             family = bernoulli(),
-      #      file = "model2_education_small_data_set",
-            backend = "cmdstanr"
-            ,
-            iter = 8000,
-            warmup = floor(8000/2)
+            file = "model2_education_small_data_set",
+            backend = "cmdstanr",
+            iter = 5000,
+            warmup = 2500
 )
 end.time <- Sys.time()
 time.taken <- round(end.time - start.time,2)
@@ -392,30 +393,34 @@ conf_matrix
 
 ```{r}
 start.time <- Sys.time()
-predictions_full <- predict(fit, newdata = data_credit_full, type = "response")
+batch_size = 1000;
+start = 1;
+binary_predictions_unclean = c();
+for (i in 1:30) {
+  if (i%%10 == 0) {
+    print(i);
+  }
+  end = start + batch_size - 1;
+  #print(start)
+  #print(end)
+  predictions_batch <- predict(fit2_education, newdata = data_credit_unclean[start:end,], 
+                  type = "response", allow_new_levels = TRUE)
+  start = end + 1
+  binary_predictions_batch <- ifelse(predictions_batch[,1] > 0.5, 1, 0)
+  binary_predictions_unclean = c(binary_predictions_unclean, binary_predictions_batch);
+  #print(binary_predictions_full)
+}
+
 end.time <- Sys.time()
 time.taken <- round(end.time - start.time,2)
 time.taken
 ```
-
 ```{r}
-binary_predictions_full <- ifelse(predictions_full[,1] > 0.5, 1, 0)
-conf_matrix <- confusionMatrix(factor(binary_predictions_full), factor(data_credit_full$default))
+#length(binary_predictions_unclean)
+#length(data_credit_unclean$default)
+
+conf_matrix <- confusionMatrix(factor(binary_predictions_unclean), reference = factor(data_credit_unclean$default))
 conf_matrix
-```
-
-```{r}
-start.time <- Sys.time()
-predictions_unclean<- predict(fit, newdata = data_credit_unclean, type = "response")
-end.time <- Sys.time()
-time.taken <- round(end.time - start.time,2)
-time.taken
-```
-```{r}
-binary_predictions_unclean <- ifelse(predictions_unclean[,1] > 0.5, 1, 0)
-conf_matrix <- confusionMatrix(factor(binary_predictions_unclean), factor(data_credit_unclean$default))
-conf_matrix
-
 ```
 
 ## Model comparison (e.g. with LOO-CV).
