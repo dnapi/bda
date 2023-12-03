@@ -1,0 +1,329 @@
+---
+title: "Final Project Appendix"
+subtitle: "Codes"
+author: anonymous # <-- hand in anonymously
+format: 
+  html:
+    toc: true
+    code-tools: true
+    code-line-numbers: true  
+    number-sections: true
+    mainfont: Georgia, serif
+    page-layout: article
+  pdf:  
+    geometry:
+    - left=1cm,top=1cm,bottom=1cm,right=7cm
+    number-sections: true
+    code-annotations: none
+editor: source
+---
+
+:::: {.content-hidden when-format="pdf"}
+::: {.callout-warning collapse=false}
+
+
+# General information
+
+No AI used in this assignment. 
+
+The following loads several needed packages:
+
+```{r}
+#| label: imports
+
+library(aaltobda)
+library(bayesplot)
+library(cmdstanr)
+library(dplyr)
+library(ggplot2)
+library(ggdist) # for stat_dotsinterval
+library(posterior)
+if(!require(brms)){
+    install.packages("brms")
+    library(brms)
+}
+
+# Set more readable themes with bigger font for plotting packages.
+ggplot2::theme_set(theme_minimal(base_size = 14))
+bayesplot::bayesplot_theme_set(theme_minimal(base_size = 14))
+
+# This registers CmdStan as the backend for compiling cmdstan-chunks.
+check_cmdstan_toolchain(fix = TRUE, quiet = TRUE)
+register_knitr_engine(override = FALSE)
+```
+
+# installations
+```{r}
+#install.packages("readxl")
+#install.packages("corrplot")
+#install.packages("psych")
+#install.packages("stats")
+#install.packages("ltm")
+#install.packages("caret") # confusion matrix -> F1
+#install.packages("xtable"). # latex output
+```
+
+# Load the packages
+```{r}
+library(readxl)
+library(corrplot)
+#library(psych)
+library(ltm)
+library(caret)
+library(xtable)
+```
+
+:::
+::::
+
+
+# Credit Card Data 
+
+## data cleaning and extraction of small subset
+```{r}
+set.seed(123)
+
+file_path_credit <- "default-credit-card.csv"
+file_path_credit_names <- "names-default-credit-card.csv"
+data_credit <- read.csv(file_path_credit)
+data_credit_names <- read.csv(file_path_credit_names)
+
+credit_short_colnames <- colnames(data_credit)
+credit_long_colnames <- colnames(data_credit_names)
+colnames(data_credit) <- credit_long_colnames
+
+data_credit_unclean=data_credit
+
+data_credit <- data_credit %>% 
+  filter(PAY_0 != -2) %>% filter(PAY_0 != 0) %>% 
+  filter(PAY_2 != -2)  %>% filter(PAY_2 != 0)  %>% 
+  filter(PAY_3 != -2)  %>% filter(PAY_3 != 0)  %>% 
+  filter(PAY_4 != -2)  %>% filter(PAY_4 != 0)  %>% 
+  filter(PAY_5 != -2)  %>% filter(PAY_5 != 0)  %>% 
+  filter(PAY_6 != -2)  %>% filter(PAY_6 != 0)  %>%
+  filter(EDUCATION > 0) %>% filter(EDUCATION < 4)
+
+data_credit_edu <-function(edu,def){data_credit %>% filter(EDUCATION == edu) %>% filter(default == def) %>% sample_n(40)}
+
+combined_df <- rbind(data_credit_edu(1,0), data_credit_edu(1,1),
+                     data_credit_edu(2,0), data_credit_edu(2,1),
+                     data_credit_edu(3,0), data_credit_edu(3,1)) 
+
+write.csv(combined_df, file = "credit_data_education_short.csv")
+
+data_credit_full = data_credit
+data_credit = combined_df
+```
+
+:::: {.content-hidden when-format="pdf"}
+::: {.callout-warning collapse=false}
+
+## correlations in full dataset
+```{r}
+#colnames(data_credit_full) <- credit_long_colnames
+df = data_credit_full
+correlations <- sapply(df[, -which(names(df) == "default")], function(x) biserial.cor(x, df$default))
+list_cor = sort(round(abs(correlations),3))
+correlations_df <- data.frame(
+  Variable = names(list_cor),
+  Correlation = as.vector(list_cor)
+)
+cor_matrix <- cor(data_credit[, -1])  
+
+corrplot(cor_matrix, method = "color", type = "upper", order = "hclust", tl.col = "black", tl.srt = 45,cl.cex = 0.7,tl.cex =0.7,number.cex = 0.4)
+title("Correlation Matrix Plot")
+
+correlations <- cor(data_credit[, 'default'], data_credit[, -which(names(data_credit) == 'default')])
+round(correlations,3)
+```
+
+:::
+::::
+
+
+## correlations in subset
+```{r}
+
+
+colnames(data_credit) <- credit_long_colnames
+df = data_credit
+correlations <- sapply(df[, -which(names(df) == "default")], function(x) biserial.cor(x, df$default))
+list_cor = sort(round(abs(correlations),3))
+correlations_df <- data.frame(
+  Variable = names(list_cor),
+  Correlation = as.vector(list_cor)
+)
+
+#correlations_df %>% filter(Correlation > 0)
+```
+
+```{r}
+# Calculate the correlation matrix
+cor_matrix <- cor(data_credit[, -1])  
+
+# Create a correlation matrix plot
+corrplot(cor_matrix, method = "color", type = "upper", order = "hclust", tl.col = "black", tl.srt = 45,cl.cex = 0.7,tl.cex =0.7,number.cex = 0.4)
+title("Correlation Matrix Plot")
+
+correlations <- cor(data_credit[, 'default'], data_credit[, -which(names(data_credit) == 'default')])
+
+round(correlations,3)
+
+```
+
+:::: {.content-hidden when-format="pdf"}
+::: {.callout-warning collapse=false}
+
+
+```{r}
+df = data_credit[, -1]
+
+col_names <- correlations_df %>% filter(Correlation > 0.07)  %>%  dplyr::select(Variable)
+
+as.list(col_names$Variable)
+
+hist(df$default)
+#par(mfrow = c(1, ncol(df)))
+#for (col in names(df)) {
+for (col in as.list(col_names$Variable)) {
+  hist(df[[col]], main = col, xlab = col, col = "skyblue", border = "black")
+}
+```
+:::
+::::
+
+## Stan model PAY_0 + PAY_2
+```{r first model}
+#Time  1.36 mins
+start.time <- Sys.time()
+fit1 <- brm(default ~ PAY_0 + PAY_2,
+            data = data_credit,
+            refresh = 0,
+            prior=c(
+              prior(normal(0,100), class="Intercept")
+              , prior(normal(0, 100), class = b)
+            ),
+            family = bernoulli(),
+           file = "pooled",
+           backend = "cmdstanr",
+           seed = 123
+)
+end.time <- Sys.time()
+time.taken <- round(end.time - start.time,2)
+time.taken
+```
+
+
+```{r}
+predictions <- predict(fit1, newdata = data_credit, type = "response")
+binary_predictions <- ifelse(predictions[,1] > 0.5, 1, 0)
+conf_matrix <- confusionMatrix(factor(binary_predictions), factor(data_credit$default))
+conf_matrix
+```
+
+
+```{r batches for first model}
+start.time <- Sys.time()
+batch_size = 1000;
+start = 1;
+binary_predictions_unclean = c();
+predictions_batch_list = c();
+for (i in 1:30) {
+  if (i%%10 == 0) {
+    print(i);
+  }
+  end = start + batch_size - 1;
+  predictions_batch <- predict(fit1, newdata = data_credit_unclean[start:end,], 
+                  type = "response", allow_new_levels = TRUE)
+  predictions_batch_list = c(predictions_batch_list, predictions_batch)
+  start = end + 1
+  binary_predictions_batch <- ifelse(predictions_batch[,1] > 0.5, 1, 0)
+  binary_predictions_unclean = c(binary_predictions_unclean, binary_predictions_batch);
+}
+
+end.time <- Sys.time()
+time.taken <- round(end.time - start.time,2)
+time.taken
+```
+```{r}
+conf_matrix <- confusionMatrix(factor(binary_predictions_unclean), reference = factor(data_credit_unclean$default))
+conf_matrix
+
+```
+
+
+## Stan model EDUCATION Hierarchical
+
+```{r second model}
+start.time <- Sys.time()
+fit2 <- brm(default ~  PAY_0 + PAY_2 + (1| EDUCATION),   # short dataset
+            data = data_credit,
+            refresh = 0,
+            prior=c(
+                prior(normal(0,100),  class="Intercept"),
+                prior(normal(0,100),  class="b"),
+                prior(exponential(.02),  class="sd")
+            ),
+            family = bernoulli(),
+            file = "model2_education_small_data_simple",
+            backend = "cmdstanr",
+            iter = 5000,
+            warmup = 2500,
+            seed = 123
+)
+end.time <- Sys.time()
+time.taken <- round(end.time - start.time,2)
+time.taken
+```
+
+```{r}
+predictions <- predict(fit2, newdata = data_credit, type = "response", allow_new_levels = TRUE)
+binary_predictions <- ifelse(predictions[,1] > 0.5, 1, 0)
+conf_matrix <- confusionMatrix(factor(binary_predictions), factor(data_credit$default))
+conf_matrix
+```
+
+```{r}
+start.time <- Sys.time()
+batch_size = 1000;
+start = 1;
+binary_predictions_unclean = c();
+predictions_batch_list = c();
+for (i in 1:30) {
+  if (i%%10 == 0) {
+    print(i);
+  }
+  end = start + batch_size - 1;
+  predictions_batch <- predict(fit2, newdata = data_credit_unclean[start:end,], 
+                  type = "response", allow_new_levels = TRUE)
+  predictions_batch_list = c(predictions_batch_list, predictions_batch)
+  start = end + 1
+  binary_predictions_batch <- ifelse(predictions_batch[,1] > 0.5, 1, 0)
+  binary_predictions_unclean = c(binary_predictions_unclean, binary_predictions_batch);
+}
+
+end.time <- Sys.time()
+time.taken <- round(end.time - start.time,2)
+time.taken
+```
+```{r}
+confusionMatrix(factor(binary_predictions_unclean), reference = factor(data_credit_unclean$default))
+```
+
+## Model comparison (e.g. with LOO-CV).
+```{r}
+l1 = loo(fit1)
+l2 = loo(fit2)
+loo_compare(l1,l2)
+```
+
+```{r}
+plot(l1, label_points = TRUE, main = 'PSIS diagnostic plot for pooled model')
+plot(l2, label_points = TRUE, main = 'PSIS diagnostic plot for hierarchical model')
+```
+
+## Convergence diagnostic  
+```{r}
+summarize_draws(fit1)
+summarize_draws(fit2)
+```
