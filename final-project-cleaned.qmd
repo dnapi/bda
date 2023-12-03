@@ -1,7 +1,5 @@
 ---
-title: "Final Project Appendix"
-subtitle: "Codes"
-author: anonymous # <-- hand in anonymously
+subtitle: "Appendix: Codes and extra material"
 format: 
   html:
     toc: true
@@ -21,6 +19,8 @@ editor: source
 :::: {.content-hidden when-format="pdf"}
 ::: {.callout-warning collapse=false}
 
+title: "Final Project "
+author: anonymous # <-- hand in anonymously
 
 # General information
 
