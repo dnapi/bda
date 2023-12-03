@@ -79,7 +79,11 @@ library(xtable)
 
 
 ## Uploading data
+
+
 ```{r}
+set.seed(123)
+
 #file_path <- "default-credit-card.xls"
 #data <- read_excel(file_path)
 file_path_credit <- "default-credit-card.csv"
@@ -256,17 +260,22 @@ fit <- brm(default ~ PAY_0 + PAY_2,
             data = data_credit,
             refresh = 0,
             prior=c(
-              prior(normal(0,100), class="Intercept"),
-                prior(normal(0, 100), class = b)
+              prior(normal(0,100), class="Intercept")
+              , prior(normal(0, 100), class = b)
             ),
             family = bernoulli(),
            file = "pooled",
-           backend = "cmdstanr"
+           backend = "cmdstanr",
+           seed = 123
 )
 end.time <- Sys.time()
 time.taken <- round(end.time - start.time,2)
 time.taken
 ```
+```{r}
+prior_summary(fit1)
+```
+
 ```{r}
 #install.packages("ggExtra", dependencies = T)
 library(ggExtra)
@@ -337,7 +346,7 @@ conf_matrix
 
 ```
 
-## Stan model (PAY_0 + PAY_2| EDUCATION) Hierarchical
+## Stan model EDUCATION Hierarchical
 
 ```{r}
 start.time <- Sys.time()
@@ -350,24 +359,25 @@ start.time <- Sys.time()
 #fit2_education <- brm(default ~ PAY_0 + PAY_2 + (1| EDUCATION),   # shart dataset
 #fit2_education <- brm(default ~ 1 + (PAY_0 + PAY_2| EDUCATION),   # shart dataset
 #fit2_education <- brm(default ~ PAY_0 + PAY_2 + (PAY_0 + PAY_2| EDUCATION),   # shart dataset
-fit2_education <- brm(default ~  PAY_0 + PAY_2 + (1| EDUCATION),   # shart dataset
 #fit2_education <- brm(default ~ (1| EDUCATION),   # short dataset
-#fit2_education <- brm(default ~ (PAY_0 + PAY_2| EDUCATION),   # shart dataset
+#fit2_education <- brm(default ~ (PAY_0 + PAY_2| EDUCATION),   # short dataset
+fit2_education <- brm(default ~  PAY_0 + PAY_2 + (1| EDUCATION),   # short dataset
             data = data_credit,
             refresh = 0,
             prior=c(
                 prior(normal(0,100),  class="Intercept"),
                 prior(normal(0,100),  class="b"),
                 prior(exponential(.02),  class="sd")
+                #,prior(exponential(.02), class="sigma") #p(sigma)
               #  ,
                # prior(normal(0, 100), class = b)
             ),
             family = bernoulli(),
-#            file = "model2_education_small_data_set_expprior",
             file = "model2_education_small_data_simple",
             backend = "cmdstanr",
             iter = 5000,
-            warmup = 2500
+            warmup = 2500,
+            seed = 123
 )
 end.time <- Sys.time()
 time.taken <- round(end.time - start.time,2)
@@ -375,6 +385,7 @@ time.taken
 
 ```
 ```{r}
+get_prior(default ~  (1| EDUCATION), data = data_credit)
 prior_summary(fit2_education)
 ```
 
