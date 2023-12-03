@@ -350,18 +350,21 @@ start.time <- Sys.time()
 #fit2_education <- brm(default ~ PAY_0 + PAY_2 + (1| EDUCATION),   # shart dataset
 #fit2_education <- brm(default ~ 1 + (PAY_0 + PAY_2| EDUCATION),   # shart dataset
 #fit2_education <- brm(default ~ PAY_0 + PAY_2 + (PAY_0 + PAY_2| EDUCATION),   # shart dataset
-#fit2_education <- brm(default ~  PAY_0 + PAY_2 + (1| EDUCATION),   # shart dataset
+fit2_education <- brm(default ~  PAY_0 + PAY_2 + (1| EDUCATION),   # shart dataset
 #fit2_education <- brm(default ~ (1| EDUCATION),   # short dataset
-fit2_education <- brm(default ~ (PAY_0 + PAY_2| EDUCATION),   # shart dataset
+#fit2_education <- brm(default ~ (PAY_0 + PAY_2| EDUCATION),   # shart dataset
             data = data_credit,
             refresh = 0,
             prior=c(
-                prior(normal(0,100),  class="Intercept")
+                prior(normal(0,100),  class="Intercept"),
+                prior(normal(0,100),  class="b"),
+                prior(exponential(.02),  class="sd")
               #  ,
                # prior(normal(0, 100), class = b)
             ),
             family = bernoulli(),
-            file = "model2_education_small_data_set",
+#            file = "model2_education_small_data_set_expprior",
+            file = "model2_education_small_data_simple",
             backend = "cmdstanr",
             iter = 5000,
             warmup = 2500
@@ -396,6 +399,7 @@ start.time <- Sys.time()
 batch_size = 1000;
 start = 1;
 binary_predictions_unclean = c();
+predictions_batch_list = c();
 for (i in 1:30) {
   if (i%%10 == 0) {
     print(i);
@@ -405,6 +409,7 @@ for (i in 1:30) {
   #print(end)
   predictions_batch <- predict(fit2_education, newdata = data_credit_unclean[start:end,], 
                   type = "response", allow_new_levels = TRUE)
+  predictions_batch_list = c(predictions_batch_list, predictions_batch)
   start = end + 1
   binary_predictions_batch <- ifelse(predictions_batch[,1] > 0.5, 1, 0)
   binary_predictions_unclean = c(binary_predictions_unclean, binary_predictions_batch);
@@ -421,6 +426,7 @@ time.taken
 
 conf_matrix <- confusionMatrix(factor(binary_predictions_unclean), reference = factor(data_credit_unclean$default))
 conf_matrix
+
 ```
 
 ## Model comparison (e.g. with LOO-CV).
