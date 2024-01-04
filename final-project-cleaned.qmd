@@ -1,5 +1,6 @@
 ---
-subtitle: "Appendix: Codes and extra material"
+title: "Appendix: Codes and extra material"
+
 format: 
   html:
     toc: true
@@ -18,9 +19,9 @@ editor: source
 
 :::: {.content-hidden when-format="pdf"}
 ::: {.callout-warning collapse=false}
-
-title: "Final Project "
-author: anonymous # <-- hand in anonymously
+#subtitle: "Appendix: Codes and extra material"
+#title: "Final Project "
+#author: anonymous # <-- hand in anonymously
 
 # General information
 
@@ -265,10 +266,10 @@ fit2 <- brm(default ~  PAY_0 + PAY_2 + (1| EDUCATION),   # short dataset
                 prior(exponential(.02),  class="sd")
             ),
             family = bernoulli(),
-            file = "model2_education_small_data_simple",
+      #      file = "model2_education_small_data_simple",
             backend = "cmdstanr",
-            iter = 5000,
-            warmup = 2500,
+            iter = 10000,
+            warmup = 5000,
             seed = 123
 )
 end.time <- Sys.time()
@@ -326,4 +327,47 @@ plot(l2, label_points = TRUE, main = 'PSIS diagnostic plot for hierarchical mode
 ```{r}
 summarize_draws(fit1)
 summarize_draws(fit2)
+```
+
+#PPC
+```{r}
+pp_check(fit1, type = "bars", ndraws = 150)
+pp_check(fit1, type = "dens_overlay", ndraws = 100)
+posterior_samples <- posterior_samples(fit1)
+
+# Use mcmc_pairs to create a scatterplot matrix for selected parameters
+# Select a subset of parameters if you have many;
+selected_params <- posterior_samples[, c("b_Intercept", "b_PAY_0", "b_PAY_2")] 
+np <- nuts_params(fit1)
+
+
+# Create the pairs plot
+mcmc_pairs(
+  selected_params, 
+  np = np, 
+  pars = c("b_Intercept", "b_PAY_0", "b_PAY_2")
+)
+```
+
+```{r}
+# Bar plot of the observed outcomes compared to the replicated datasets
+pp_check(fit2, type = "bars", ndraws = 100)
+
+# Density plot of the predicted probabilities
+pp_check(fit2, type = "dens_overlay", ndraws = 100)
+posterior_samples <- posterior_samples(fit2)
+
+# Use mcmc_pairs to create a scatterplot matrix for selected parameters
+# Select a subset of parameters if you have many;
+#selected_params <- posterior_samples[, c("b_Intercept", "b_PAY_0", "b_PAY_2")] 
+selected_params <- posterior_samples[, c("b_Intercept", "b_PAY_0", "b_PAY_2", 
+                                         "r_EDUCATION[2,Intercept]","r_EDUCATION[2,Intercept]","r_EDUCATION[3,Intercept]","sd_EDUCATION__Intercept")] 
+np <- nuts_params(fit2)
+
+# Create the pairs plot
+mcmc_pairs(
+  selected_params, 
+  np = np, 
+  pars = c("b_Intercept", "b_PAY_0", "b_PAY_2","r_EDUCATION[2,Intercept]","r_EDUCATION[2,Intercept]","r_EDUCATION[3,Intercept]","sd_EDUCATION__Intercept")
+)
 ```
